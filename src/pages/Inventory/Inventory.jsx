@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Search, Plus, Filter, Edit, Trash2, AlertTriangle } from 'lucide-react';
+import { Search, Plus, Filter, Edit, Trash2, AlertTriangle, FileText, Bell } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import Input from '../../components/Input';
 import Button from '../../components/Button';
 import ProductModal from './ProductModal';
+import KardexModal from './KardexModal';
 import './Inventory.css';
 
 const Inventory = () => {
@@ -11,6 +12,32 @@ const Inventory = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState(null);
+
+    // Kardex & Alerts State
+    const [isKardexOpen, setIsKardexOpen] = useState(false);
+    const [kardexProduct, setKardexProduct] = useState(null);
+    const [alerts, setAlerts] = useState([]);
+
+    React.useEffect(() => {
+        fetchAlerts();
+    }, []);
+
+    const fetchAlerts = async () => {
+        try {
+            const res = await fetch('http://localhost:3001/api/inventory/alerts');
+            if (res.ok) {
+                const data = await res.json();
+                setAlerts(data);
+            }
+        } catch (error) {
+            console.error("Error fetching alerts:", error);
+        }
+    };
+
+    const handleOpenKardex = (product) => {
+        setKardexProduct(product);
+        setIsKardexOpen(true);
+    };
 
     const filteredProducts = products.filter(product =>
         product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -57,6 +84,31 @@ const Inventory = () => {
                 </div>
             </div>
 
+            {/* INV-01: Alerts Dashboard */}
+            {alerts.length > 0 && (
+                <div className="alerts-section">
+                    <h3 className="alerts-title"><Bell size={18} /> Alertas de Reposición (Dinámicas)</h3>
+                    <div className="alerts-grid">
+                        {alerts.map(alert => (
+                            <div key={alert.id} className="alert-card">
+                                <div className="alert-header">
+                                    <span className="alert-product">{alert.name}</span>
+                                    <span className="alert-badge">Stock Crítico</span>
+                                </div>
+                                <div className="alert-details">
+                                    <p>Stock Actual: <strong>{alert.stock}</strong></p>
+                                    <p>Ventas Diarias (30d): <strong>{alert.avgDailySales}</strong></p>
+                                    <p>Mínimo Dinámico: <strong>{alert.dynamicMinStock}</strong></p>
+                                    <div className="alert-suggestion">
+                                        Sugerencia: Pedir <strong>{alert.suggestedReorder}</strong> un.
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             <div className="inventory-table-container">
                 <table className="inventory-table">
                     <thead>
@@ -98,6 +150,9 @@ const Inventory = () => {
                                         <button className="icon-btn edit" onClick={() => handleEdit(product)}>
                                             <Edit size={18} />
                                         </button>
+                                        <button className="icon-btn kardex" onClick={() => handleOpenKardex(product)} title="Ver Kardex">
+                                            <FileText size={18} />
+                                        </button>
                                         <button className="icon-btn delete" onClick={() => handleDelete(product.id)}>
                                             <Trash2 size={18} />
                                         </button>
@@ -115,6 +170,13 @@ const Inventory = () => {
                 product={editingProduct}
                 onSave={handleSave}
             />
+
+            {isKardexOpen && (
+                <KardexModal
+                    product={kardexProduct}
+                    onClose={() => setIsKardexOpen(false)}
+                />
+            )}
         </div>
     );
 };

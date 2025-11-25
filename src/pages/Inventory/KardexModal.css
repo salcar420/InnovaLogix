@@ -1,0 +1,89 @@
+.kardex-modal {
+    width: 800px;
+    max-width: 95vw;
+}
+
+.kardex-summary {
+    display: flex;
+    gap: 2rem;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+}
+
+.summary-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.summary-item .label {
+    font-size: 0.85rem;
+    color: #6c757d;
+}
+
+.summary-item .value {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.kardex-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.kardex-table th,
+.kardex-table td {
+    padding: 10px;
+    text-align: left;
+    border-bottom: 1px solid #eee;
+}
+
+.kardex-table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+    color: #495057;
+}
+
+.badge {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.badge.sale {
+    background-color: #ffebee;
+    color: #c62828;
+}
+
+.badge.purchase_confirm {
+    background-color: #e8f5e9;
+    color: #2e7d32;
+}
+
+.badge.purchase_cancel {
+    background-color: #fff3e0;
+    color: #ef6c00;
+}
+
+.badge.adjustment {
+    background-color: #e3f2fd;
+    color: #1565c0;
+}
+
+.text-success {
+    color: #2e7d32;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.text-danger {
+    color: #c62828;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}

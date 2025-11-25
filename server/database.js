@@ -150,6 +150,18 @@ const initDB = async () => {
             stock INTEGER
         )`);
 
+        // Inventory Movements Table (Kardex)
+        await pool.query(`CREATE TABLE IF NOT EXISTS inventory_movements (
+            id SERIAL PRIMARY KEY,
+            productId INTEGER REFERENCES products(id),
+            type TEXT,
+            quantity INTEGER,
+            previousStock INTEGER,
+            newStock INTEGER,
+            reference TEXT,
+            timestamp TEXT
+        )`);
+
         // Seed Products
         const resProducts = await pool.query("SELECT count(*) as count FROM products");
         if (parseInt(resProducts.rows[0].count) === 0) {
