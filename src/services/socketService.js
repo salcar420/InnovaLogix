@@ -16,15 +16,15 @@ class SocketService {
             });
 
             this.socket.on('connect', () => {
-                console.log('✅ WebSocket conectado:', this.socket.id);
+                console.log('WebSocket conectado:', this.socket.id);
             });
 
             this.socket.on('disconnect', (reason) => {
-                console.log('❌ WebSocket desconectado:', reason);
+                console.log('WebSocket desconectado:', reason);
             });
 
             this.socket.on('connect_error', (error) => {
-                console.error('❌ Error de conexión WebSocket:', error);
+                console.error('Error de conexión WebSocket:', error);
             });
         }
         return this.socket;

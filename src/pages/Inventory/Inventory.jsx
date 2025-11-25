@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, Filter, Edit, Trash2, AlertTriangle, Wifi, WifiOff } from 'lucide-react';
-import React, { useState } from 'react';
-import { Search, Plus, Filter, Edit, Trash2, AlertTriangle, FileText, Bell } from 'lucide-react';
+import { Search, Plus, Filter, Edit, Trash2, AlertTriangle, Wifi, WifiOff, FileText, Bell } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import socketService from '../../services/socketService';
 import Input from '../../components/Input';
