@@ -6,41 +6,37 @@ dotenv.config();
 const { Pool } = pg;
 
 const pool = new Pool({
-    user: process.env.DB_USER,
-    host: process.env.DB_HOST,
-    database: process.env.DB_DATABASE,
-    password: process.env.DB_PASSWORD,
-    port: process.env.DB_PORT,
-    port: process.env.DB_PORT,
+    user: process.env.DB_USER || 'postgres',
+    host: process.env.DB_HOST || 'localhost',
+    database: process.env.DB_DATABASE || 'ads_db',
+    password: process.env.DB_PASSWORD || 'admin123',
+    port: parseInt(process.env.DB_PORT) || 5432,
 });
 
-console.log("DB Config in database.js:", {
+console.log("DB Config:", {
     user: process.env.DB_USER,
     host: process.env.DB_HOST,
     database: process.env.DB_DATABASE,
     port: process.env.DB_PORT,
-    passwordLength: process.env.DB_PASSWORD ? process.env.DB_PASSWORD.length : 0
+    passwordSet: !!process.env.DB_PASSWORD
 });
 
 pool.on('connect', () => {
-    console.log('New client connected to database');
+    console.log('✅ Connected to PostgreSQL database');
 });
 
 pool.on('error', (err, client) => {
-    console.error('Unexpected error on idle client', err);
-});
-
-
-console.log("DB Config in database.js:", {
-    user: process.env.DB_USER,
-    host: process.env.DB_HOST,
-    database: process.env.DB_DATABASE,
-    port: process.env.DB_PORT,
-    passwordLength: process.env.DB_PASSWORD ? process.env.DB_PASSWORD.length : 0
+    console.error('❌ Unexpected database error:', err);
+    process.exit(-1);
 });
 
 const initDB = async () => {
     try {
+        // Test connection first
+        console.log('🔄 Testing database connection...');
+        await pool.query('SELECT NOW()');
+        console.log('✅ Database connection successful');
+
         // Products Table
         await pool.query(`CREATE TABLE IF NOT EXISTS products (
             id SERIAL PRIMARY KEY,
@@ -260,7 +256,14 @@ const initDB = async () => {
         console.log("Database initialized successfully");
 
     } catch (err) {
-        console.error("Error initializing database:", err);
+        console.error("❌ Error initializing database:", err.message);
+        console.error("Full error:", err);
+        console.error("\n🔧 Troubleshooting:");
+        console.error("1. Verify PostgreSQL is running");
+        console.error("2. Check credentials in .env file");
+        console.error("3. Ensure database 'ads_db' exists");
+        console.error("4. Test connection: psql -U postgres -d ads_db");
+        process.exit(1);
     }
 };
 

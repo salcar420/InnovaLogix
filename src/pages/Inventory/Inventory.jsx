@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { Search, Plus, Filter, Edit, Trash2, AlertTriangle, FileText, Bell } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, Plus, Filter, Edit, Trash2, AlertTriangle, Wifi, WifiOff, FileText, Bell } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useStore } from '../../context/StoreContext';
+import socketService from '../../services/socketService';
 import Input from '../../components/Input';
 import Button from '../../components/Button';
 import ProductModal from './ProductModal';
@@ -13,6 +14,40 @@ const Inventory = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState(null);
+    const [realtimeUpdates, setRealtimeUpdates] = useState([]);
+    const [isConnected, setIsConnected] = useState(false);
+
+    useEffect(() => {
+        // Check connection status
+        setIsConnected(socketService.isConnected());
+
+        // Listen for real-time stock updates
+        const listenerId = socketService.onStockUpdate((data) => {
+            // Add visual notification of update
+            const notificationId = Date.now();
+            setRealtimeUpdates(prev => [...prev, {
+                id: notificationId,
+                productName: data.productName,
+                action: data.action,
+                stock: data.stock
+            }]);
+
+            // Remove notification after 5 seconds
+            setTimeout(() => {
+                setRealtimeUpdates(prev => prev.filter(u => u.id !== notificationId));
+            }, 5000);
+        });
+
+        // Check connection periodically
+        const connectionCheck = setInterval(() => {
+            setIsConnected(socketService.isConnected());
+        }, 3000);
+
+        return () => {
+            socketService.offStockUpdate(listenerId);
+            clearInterval(connectionCheck);
+        };
+    }, []);
 
     // Kardex & Alerts State
     const [isKardexOpen, setIsKardexOpen] = useState(false);
@@ -75,7 +110,13 @@ const Inventory = () => {
     return (
         <div className="inventory-container">
             <div className="inventory-header">
-                <h2 className="page-title">Gestión de Inventario</h2>
+                <h2 className="page-title">
+                    Gestión de Inventario
+                    <span className={`connection-status ${isConnected ? 'connected' : 'disconnected'}`}>
+                        {isConnected ? <Wifi size={16} /> : <WifiOff size={16} />}
+                        {isConnected ? 'Tiempo Real' : 'Desconectado'}
+                    </span>
+                </h2>
                 <div className="header-actions">
                     <div className="search-wrapper">
                         <Input
@@ -91,6 +132,16 @@ const Inventory = () => {
                 </div>
             </div>
 
+            {/* Real-time updates notifications */}
+            <div className="realtime-notifications">
+                {realtimeUpdates.slice(-3).map(update => (
+                    <div key={update.id} className="realtime-notification">
+                        🔄 <strong>{update.productName}</strong> - Stock actualizado a {update.stock} unidades
+                        {update.action === 'sale' && ' (Venta realizada)'}
+                        {update.action === 'purchase' && ' (Compra confirmada)'}
+                    </div>
+                ))}
+            </div>
             {/* INV-01: Alerts Dashboard */}
             {alerts.length > 0 && (
                 <div className="alerts-section">
