@@ -1,10 +1,49 @@
 import express from 'express';
 import cors from 'cors';
 import bodyParser from 'body-parser';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 import pool from './database.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Create HTTP server and Socket.IO instance
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"]
+    }
+});
+
+// Stock cache for faster reads
+const stockCache = new Map();
+
+// Function to update stock cache
+async function refreshStockCache() {
+    try {
+        const result = await pool.query("SELECT id, name, stock FROM products");
+        result.rows.forEach(product => {
+            stockCache.set(product.id, { name: product.name, stock: product.stock });
+        });
+        console.log(`Stock cache refreshed with ${stockCache.size} products`);
+    } catch (err) {
+        console.error("Error refreshing stock cache:", err);
+    }
+}
+
+// Initialize cache on startup
+refreshStockCache();
+
+// Socket.IO connection handling
+io.on('connection', (socket) => {
+    console.log('Client connected:', socket.id);
+    
+    socket.on('disconnect', () => {
+        console.log('Client disconnected:', socket.id);
+    });
+});
 
 app.use(cors());
 app.use(bodyParser.json());
@@ -20,6 +59,27 @@ app.get('/api/products', async (req, res) => {
     }
 });
 
+// New endpoint for fast stock check using cache
+app.get('/api/products/stock/:id', async (req, res) => {
+    try {
+        const productId = parseInt(req.params.id);
+        if (stockCache.has(productId)) {
+            res.json(stockCache.get(productId));
+        } else {
+            const result = await pool.query("SELECT id, name, stock FROM products WHERE id = $1", [productId]);
+            if (result.rows.length > 0) {
+                const product = result.rows[0];
+                stockCache.set(productId, { name: product.name, stock: product.stock });
+                res.json({ name: product.name, stock: product.stock });
+            } else {
+                res.status(404).json({ error: "Product not found" });
+            }
+        }
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.post('/api/products', async (req, res) => {
     const { name, price, cost, stock, minStock, category, image } = req.body;
     try {
@@ -27,7 +87,20 @@ app.post('/api/products', async (req, res) => {
             "INSERT INTO products (name, price, cost, stock, minStock, category, image) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *",
             [name, price, cost, stock, minStock, category, image]
         );
-        res.json(result.rows[0]);
+        
+        // Update cache
+        const newProduct = result.rows[0];
+        stockCache.set(newProduct.id, { name: newProduct.name, stock: newProduct.stock });
+        
+        // Notify all clients
+        io.emit('stockUpdate', { 
+            productId: newProduct.id, 
+            productName: newProduct.name, 
+            stock: newProduct.stock,
+            action: 'created'
+        });
+        
+        res.json(newProduct);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -40,7 +113,20 @@ app.put('/api/products/:id', async (req, res) => {
             "UPDATE products SET name = $1, price = $2, cost = $3, stock = $4, minStock = $5, category = $6, image = $7 WHERE id = $8 RETURNING *",
             [name, price, cost, stock, minStock, category, image, req.params.id]
         );
-        res.json(result.rows[0]);
+        
+        // Update cache
+        const updatedProduct = result.rows[0];
+        stockCache.set(updatedProduct.id, { name: updatedProduct.name, stock: updatedProduct.stock });
+        
+        // Notify all clients
+        io.emit('stockUpdate', { 
+            productId: updatedProduct.id, 
+            productName: updatedProduct.name, 
+            stock: updatedProduct.stock,
+            action: 'updated'
+        });
+        
+        res.json(updatedProduct);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -49,6 +135,18 @@ app.put('/api/products/:id', async (req, res) => {
 app.delete('/api/products/:id', async (req, res) => {
     try {
         await pool.query("DELETE FROM products WHERE id = $1", [req.params.id]);
+        
+        // Remove from cache
+        const productId = parseInt(req.params.id);
+        stockCache.delete(productId);
+        
+        // Notify all clients
+        io.emit('stockUpdate', { 
+            productId: productId, 
+            stock: 0,
+            action: 'deleted'
+        });
+        
         res.json({ message: "Deleted" });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -86,13 +184,16 @@ app.post('/api/sales', async (req, res) => {
         );
         const saleId = saleRes.rows[0].id;
 
+        const stockUpdates = []; // Track stock changes for WebSocket
+
         // Insert Sale Items & Update Stock
         for (const item of cartItems) {
             // Check stock first
-            const productRes = await client.query("SELECT stock FROM products WHERE name = $1", [item.name]);
+            const productRes = await client.query("SELECT id, stock FROM products WHERE name = $1", [item.name]);
             if (productRes.rows.length === 0) {
                 throw new Error(`Producto no encontrado: ${item.name}`);
             }
+            const productId = productRes.rows[0].id;
             const currentStock = productRes.rows[0].stock;
             if (currentStock < item.quantity) {
                 throw new Error(`Stock insuficiente para ${item.name}. Disponible: ${currentStock}, Solicitado: ${item.quantity}`);
@@ -106,9 +207,28 @@ app.post('/api/sales', async (req, res) => {
                 "UPDATE products SET stock = stock - $1 WHERE name = $2",
                 [item.quantity, item.name]
             );
+            
+            // Calculate new stock and update cache
+            const newStock = currentStock - item.quantity;
+            stockCache.set(productId, { name: item.name, stock: newStock });
+            
+            stockUpdates.push({ 
+                productId, 
+                productName: item.name, 
+                stock: newStock,
+                quantitySold: item.quantity
+            });
         }
 
         await client.query('COMMIT');
+        
+        // Emit stock updates to all connected clients AFTER successful commit
+        stockUpdates.forEach(update => {
+            io.emit('stockUpdate', { ...update, action: 'sale' });
+        });
+        
+        console.log(`Sale #${saleId} completed. Stock updates broadcasted to clients.`);
+        
         res.json({ id: saleId, message: "Sale recorded" });
 
     } catch (err) {
@@ -216,6 +336,8 @@ app.put('/api/purchases/:id/status', async (req, res) => {
             [status, purchaseId]
         );
 
+        const stockUpdates = []; // Track stock changes for WebSocket
+
         // Logic: If moving TO 'Confirmed' (or 'Received') FROM something else -> Increase Stock
         // If moving FROM 'Confirmed' TO 'Cancelled' -> Decrease Stock (Revert)
 
@@ -224,8 +346,21 @@ app.put('/api/purchases/:id/status', async (req, res) => {
             for (const item of itemsRes.rows) {
                 await client.query(
                     "UPDATE products SET stock = stock + $1 WHERE id = $2",
-                    [item.quantity, item.productid] // Note: pg returns lowercase column names usually
+                    [item.quantity, item.productid]
                 );
+                
+                // Get updated stock
+                const productRes = await client.query("SELECT name, stock FROM products WHERE id = $1", [item.productid]);
+                if (productRes.rows.length > 0) {
+                    const product = productRes.rows[0];
+                    stockCache.set(item.productid, { name: product.name, stock: product.stock });
+                    stockUpdates.push({ 
+                        productId: item.productid, 
+                        productName: product.name, 
+                        stock: product.stock,
+                        quantityAdded: item.quantity
+                    });
+                }
             }
         } else if (status === 'Cancelled' && currentStatus === 'Confirmed') {
             const itemsRes = await client.query("SELECT * FROM purchase_items WHERE purchaseId = $1", [purchaseId]);
@@ -234,10 +369,33 @@ app.put('/api/purchases/:id/status', async (req, res) => {
                     "UPDATE products SET stock = stock - $1 WHERE id = $2",
                     [item.quantity, item.productid]
                 );
+                
+                // Get updated stock
+                const productRes = await client.query("SELECT name, stock FROM products WHERE id = $1", [item.productid]);
+                if (productRes.rows.length > 0) {
+                    const product = productRes.rows[0];
+                    stockCache.set(item.productid, { name: product.name, stock: product.stock });
+                    stockUpdates.push({ 
+                        productId: item.productid, 
+                        productName: product.name, 
+                        stock: product.stock,
+                        quantityRemoved: item.quantity
+                    });
+                }
             }
         }
 
         await client.query('COMMIT');
+        
+        // Emit stock updates to all connected clients AFTER successful commit
+        stockUpdates.forEach(update => {
+            io.emit('stockUpdate', { ...update, action: 'purchase' });
+        });
+        
+        if (stockUpdates.length > 0) {
+            console.log(`Purchase #${purchaseId} status changed. Stock updates broadcasted to clients.`);
+        }
+        
         res.json(result.rows[0]);
     } catch (err) {
         await client.query('ROLLBACK');
@@ -323,8 +481,9 @@ app.post('/api/surveys', async (req, res) => {
     }
 });
 
-app.listen(PORT, () => {
+httpServer.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`WebSocket server ready for real-time stock updates`);
 });
 
 // Keep process alive hack

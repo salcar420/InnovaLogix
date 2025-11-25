@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import socketService from '../services/socketService';
 
 const StoreContext = createContext();
 
@@ -44,6 +45,33 @@ export const StoreProvider = ({ children }) => {
             setLoading(false);
         };
         loadData();
+
+        // Connect to WebSocket and listen for stock updates
+        socketService.connect();
+        const listenerId = socketService.onStockUpdate((data) => {
+            console.log('🔄 Actualizando stock en tiempo real:', data);
+            
+            // Update products state with new stock
+            setProducts(prevProducts => 
+                prevProducts.map(product => {
+                    // Match by ID or name depending on what's available in the update
+                    const matchById = product.id === data.productId;
+                    const matchByName = product.name === data.productName;
+                    
+                    if (matchById || matchByName) {
+                        return { ...product, stock: data.stock };
+                    }
+                    return product;
+                })
+            );
+        });
+
+        // Cleanup on unmount
+        return () => {
+            socketService.offStockUpdate(listenerId);
+            // Don't disconnect completely as other components might use it
+            // socketService.disconnect();
+        };
     }, []);
 
     const fetchProducts = async () => {
