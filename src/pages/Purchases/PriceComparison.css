@@ -1,0 +1,100 @@
+.price-comparison {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+.loading-indicator {
+    text-align: center;
+    padding: var(--spacing-sm);
+    background-color: var(--color-bg-secondary);
+    color: var(--color-text-muted);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-sm);
+}
+
+.comparison-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: var(--spacing-md);
+}
+
+.product-card {
+    background-color: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-md);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.product-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.product-header h5 {
+    margin: 0;
+    font-size: var(--font-size-md);
+    font-weight: 600;
+}
+
+.category-tag {
+    font-size: 10px;
+    padding: 2px 6px;
+    background-color: var(--color-bg-main);
+    border-radius: 4px;
+    color: var(--color-text-muted);
+    border: 1px solid var(--color-border);
+}
+
+.prices-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.price-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px;
+    background-color: var(--color-bg-main);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border);
+}
+
+.price-row.best-price {
+    border-color: var(--color-success);
+    background-color: rgba(16, 185, 129, 0.05);
+}
+
+.supplier-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.supplier-name {
+    font-size: var(--font-size-sm);
+}
+
+.badge-best {
+    font-size: 10px;
+    color: var(--color-success);
+    font-weight: 600;
+}
+
+.price-value {
+    font-weight: 600;
+    color: var(--color-text-main);
+}
+
+.no-data {
+    text-align: center;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    padding: var(--spacing-sm);
+}

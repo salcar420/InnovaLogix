@@ -1,0 +1,68 @@
+:root {
+  /* Colors - Outdoor/Premium Theme */
+  --color-primary: #2E7D32; /* Forest Green */
+  --color-primary-hover: #1B5E20;
+  --color-secondary: #FF6F00; /* Amber/Orange for accents */
+  --color-secondary-hover: #E65100;
+  
+  --color-bg-main: #121212; /* Deep Dark Background */
+  --color-bg-card: #1E1E1E; /* Card Background */
+  --color-bg-sidebar: #0F0F0F;
+  
+  --color-text-main: #E0E0E0;
+  --color-text-muted: #A0A0A0;
+  --color-text-inverse: #FFFFFF;
+  
+  --color-border: #333333;
+  --color-success: #4CAF50;
+  --color-warning: #FFC107;
+  --color-error: #F44336;
+
+  /* Typography */
+  --font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.5rem;
+  --font-size-2xl: 2rem;
+
+  /* Spacing */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+
+  /* Effects */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.3);
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 1rem;
+  
+  --transition-fast: 0.2s ease;
+}
+
+body {
+  background-color: var(--color-bg-main);
+  color: var(--color-text-main);
+  font-family: var(--font-family);
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-bg-main);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary);
+}

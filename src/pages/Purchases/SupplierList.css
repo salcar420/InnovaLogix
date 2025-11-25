@@ -1,0 +1,13 @@
+.supplier-list {
+    display: flex;
+
+    .form-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: var(--spacing-sm);
+    }
+
+    .font-medium {
+        font-weight: 500;
+        color: var(--color-text-main);
+    }
