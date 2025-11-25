@@ -175,12 +175,17 @@ const PurchaseForm = ({ onComplete }) => {
         const result = await placeSupplierOrder({
             supplierId: parseInt(effectiveSupplierId),
             supplierName: supplier ? supplier.name : 'Proveedor Desconocido',
-            items: items.map(item => ({
-                ...item,
-                productId: parseInt(item.productId),
-                quantity: parseInt(item.quantity),
-                cost: parseFloat(item.cost)
-            })),
+            items: items.map(item => {
+                const product = availableProducts.find(p => p.id === parseInt(item.productId)) ||
+                    allSupplierProducts.find(p => p.productid === parseInt(item.productId));
+                return {
+                    ...item,
+                    productId: parseInt(item.productId),
+                    productName: product ? (product.name || product.productname) : 'Producto Desconocido',
+                    quantity: parseInt(item.quantity),
+                    cost: parseFloat(item.cost)
+                };
+            }),
             total
         });
 

@@ -356,41 +356,41 @@ export const StoreProvider = ({ children }) => {
     };
 
     const placeSupplierOrder = async (orderData) => {
-        console.log("Placing order:", orderData);
-        // Simulate success and update stock levels
-        const newPurchase = {
-            ...orderData,
-            id: Date.now(),
-            date: new Date().toISOString(),
-            status: 'Pending',
-            invoiceNumber: `ORD-${Date.now()}`
-        };
-        // Update purchases state
-        setPurchases(prev => [newPurchase, ...prev]);
-        // Decrement stock for each item in the order
-        if (orderData.items && Array.isArray(orderData.items)) {
-            // Update supplierProducts stock
-            setSupplierProducts(prev => prev.map(sp => {
-                const orderedItem = orderData.items.find(item => {
-                    const matchProduct = parseInt(item.productId) === sp.productId;
-                    const matchSupplier = item.supplierId ? parseInt(item.supplierId) === sp.supplierId : (orderData.supplierId && sp.supplierId === parseInt(orderData.supplierId));
-                    return matchProduct && matchSupplier;
-                });
-                if (orderedItem) {
-                    return { ...sp, stock: sp.stock - orderedItem.quantity };
-                }
-                return sp;
-            }));
-            // Update global product stock as well
-            setProducts(prev => prev.map(p => {
-                const orderedItem = orderData.items.find(item => parseInt(item.productId) === p.id);
-                if (orderedItem) {
-                    return { ...p, stock: p.stock - orderedItem.quantity };
-                }
-                return p;
-            }));
+        try {
+            const res = await fetch('http://localhost:3001/api/purchases', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ...orderData,
+                    status: 'Pending',
+                    invoiceNumber: `ORD-${Date.now()}`
+                })
+            });
+            const savedPurchase = await res.json();
+
+            if (savedPurchase.id) {
+                // Construct full object for local state
+                const newPurchase = {
+                    ...orderData,
+                    id: savedPurchase.id,
+                    date: new Date().toISOString(),
+                    status: 'Pending',
+                    invoiceNumber: `ORD-${Date.now()}`
+                };
+
+                setPurchases(prev => [newPurchase, ...prev]);
+
+                // Also update stock locally if needed, but for Pending we don't update stock yet.
+                // We only update stock on Confirm.
+
+                return { success: true, message: "Orden registrada correctamente" };
+            } else {
+                return { success: false, message: "Error al guardar la orden" };
+            }
+        } catch (err) {
+            console.error("Error placing order:", err);
+            return { success: false, message: err.message };
         }
-        return { success: true, message: "Orden simulada enviada correctamente" };
     };
 
     const addPurchase = (purchase) => {
