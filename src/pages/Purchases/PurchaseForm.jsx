@@ -162,13 +162,18 @@ const PurchaseForm = ({ onComplete }) => {
 
 
     const handleSubmit = async () => {
-        if ((supplierId === '' && (!items[0] || !items[0].supplierId)) || items.length === 0) return;
+        // Determine the effective supplier ID. 
+        // In 'supplier' mode, it's the selected supplierId.
+        // In 'product' mode, we take it from the first item (assuming single-supplier order for now).
+        const effectiveSupplierId = supplierId || (items.length > 0 ? items[0].supplierId : '');
 
-        const supplier = suppliers.find(s => s.id === parseInt(supplierId));
+        if ((!effectiveSupplierId) || items.length === 0) return;
+
+        const supplier = suppliers.find(s => s.id === parseInt(effectiveSupplierId));
         const total = items.reduce((sum, item) => sum + (item.quantity * item.cost), 0);
 
         const result = await placeSupplierOrder({
-            supplierId: parseInt(supplierId),
+            supplierId: parseInt(effectiveSupplierId),
             supplierName: supplier ? supplier.name : 'Proveedor Desconocido',
             items: items.map(item => ({
                 ...item,
@@ -379,6 +384,7 @@ const PurchaseForm = ({ onComplete }) => {
                     <thead>
                         <tr>
                             <th>Producto</th>
+                            <th>Proveedor</th>
                             <th>Cantidad</th>
                             <th>Costo Unit.</th>
                             <th>Subtotal</th>
@@ -388,9 +394,11 @@ const PurchaseForm = ({ onComplete }) => {
                     <tbody>
                         {items.map((item, index) => {
                             const product = availableProducts.find(p => p.id === parseInt(item.productId));
+                            const itemSupplier = suppliers.find(s => s.id === parseInt(item.supplierId));
                             return (
                                 <tr key={index}>
                                     <td>{product ? product.name : `ID: ${item.productId}`}</td>
+                                    <td>{itemSupplier ? itemSupplier.name : 'Desconocido'}</td>
                                     <td>{item.quantity}</td>
                                     <td>S/ {parseFloat(item.cost).toFixed(2)}</td>
                                     <td>S/ {(item.quantity * item.cost).toFixed(2)}</td>
