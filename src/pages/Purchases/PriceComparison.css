@@ -1,100 +1,122 @@
 .price-comparison {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-md);
+    padding: 20px;
 }
 
 .loading-indicator {
     text-align: center;
-    padding: var(--spacing-sm);
-    background-color: var(--color-bg-secondary);
-    color: var(--color-text-muted);
-    border-radius: var(--radius-sm);
-    font-size: var(--font-size-sm);
+    padding: 10px;
+    background-color: #e0f2fe;
+    color: #0369a1;
+    border-radius: 6px;
+    margin-bottom: 20px;
+}
+
+.comparison-controls {
+    margin-bottom: 20px;
+}
+
+.search-input {
+    width: 100%;
+    max-width: 400px;
+    padding: 10px 15px;
+    border: 1px solid #333;
+    background-color: #1a1a1a;
+    color: #fff;
+    border-radius: 8px;
+    font-size: 1rem;
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: #10b981;
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
 }
 
 .comparison-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: var(--spacing-md);
+    gap: 20px;
 }
 
 .product-card {
-    background-color: var(--color-bg-secondary);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    padding: var(--spacing-md);
+    background-color: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 8px;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-sm);
 }
 
 .product-header {
+    padding: 15px;
+    border-bottom: 1px solid #333;
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
+    align-items: center;
 }
 
 .product-header h5 {
     margin: 0;
-    font-size: var(--font-size-md);
-    font-weight: 600;
+    font-size: 1.1rem;
+    color: #fff;
 }
 
 .category-tag {
-    font-size: 10px;
-    padding: 2px 6px;
-    background-color: var(--color-bg-main);
-    border-radius: 4px;
-    color: var(--color-text-muted);
-    border: 1px solid var(--color-border);
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    background-color: #333;
+    border-radius: 12px;
+    color: #9ca3af;
 }
 
 .prices-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+    padding: 10px;
+    flex: 1;
 }
 
 .price-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 8px;
-    background-color: var(--color-bg-main);
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--color-border);
+    padding: 10px;
+    border-bottom: 1px solid #2a2a2a;
+}
+
+.price-row:last-child {
+    border-bottom: none;
 }
 
 .price-row.best-price {
-    border-color: var(--color-success);
-    background-color: rgba(16, 185, 129, 0.05);
+    background-color: rgba(16, 185, 129, 0.1);
+    border-radius: 6px;
+    border: 1px solid rgba(16, 185, 129, 0.3);
 }
 
 .supplier-info {
     display: flex;
     flex-direction: column;
-    gap: 2px;
 }
 
 .supplier-name {
-    font-size: var(--font-size-sm);
+    font-weight: 500;
+    color: #e5e5e5;
 }
 
 .badge-best {
-    font-size: 10px;
-    color: var(--color-success);
-    font-weight: 600;
+    font-size: 0.7rem;
+    color: #10b981;
+    font-weight: bold;
 }
 
 .price-value {
-    font-weight: 600;
-    color: var(--color-text-main);
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: #fff;
 }
 
 .no-data {
     text-align: center;
-    color: var(--color-text-muted);
-    font-size: var(--font-size-sm);
-    padding: var(--spacing-sm);
+    padding: 20px;
+    color: #6b7280;
+    font-style: italic;
 }

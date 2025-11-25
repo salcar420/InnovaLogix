@@ -5,6 +5,7 @@ import './PriceComparison.css';
 
 const PriceComparison = () => {
     const { products, suppliers, supplierProducts, syncSupplierPrices } = useStore();
+    const [searchTerm, setSearchTerm] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
     useEffect(() => {
@@ -20,27 +21,39 @@ const PriceComparison = () => {
     }, [suppliers.length]); // Re-run if suppliers change
 
     // Group prices by product
-    const productPrices = products.map(product => {
-        const prices = supplierProducts
-            .filter(sp => sp.productId === product.id)
-            .map(sp => {
-                const supplier = suppliers.find(s => s.id === sp.supplierId);
-                return {
-                    supplierName: supplier ? supplier.name : 'Desconocido',
-                    cost: sp.cost,
-                    lastUpdated: new Date().toLocaleDateString() // Mock date
-                };
-            })
-            .sort((a, b) => a.cost - b.cost); // Sort by cost ascending
+    const productPrices = (Array.isArray(products) ? products : [])
+        .filter(product => product && product.name && product.name.toLowerCase().includes(searchTerm.toLowerCase()))
+        .map(product => {
+            const prices = (Array.isArray(supplierProducts) ? supplierProducts : [])
+                .filter(sp => sp.productId === product.id)
+                .map(sp => {
+                    const supplier = Array.isArray(suppliers) ? suppliers.find(s => s.id === sp.supplierId) : null;
+                    return {
+                        supplierName: supplier ? supplier.name : 'Desconocido',
+                        price: sp.price,
+                        lastUpdated: new Date().toLocaleDateString() // Mock date
+                    };
+                })
+                .sort((a, b) => a.price - b.price); // Sort by price ascending
 
-        return {
-            ...product,
-            prices
-        };
-    });
+            return {
+                ...product,
+                prices
+            };
+        });
 
     return (
         <div className="price-comparison">
+            <div className="comparison-controls">
+                <input
+                    type="text"
+                    placeholder="Buscar producto..."
+                    className="search-input"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                />
+            </div>
+
             {isLoading && <div className="loading-indicator">Actualizando precios...</div>}
 
             <div className="comparison-grid">
@@ -60,7 +73,7 @@ const PriceComparison = () => {
                                             {index === 0 && <span className="badge-best">Mejor Precio</span>}
                                         </div>
                                         <div className="price-value">
-                                            S/ {price.cost.toFixed(2)}
+                                            S/ {Number(price.price || 0).toFixed(2)}
                                         </div>
                                     </div>
                                 ))

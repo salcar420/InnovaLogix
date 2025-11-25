@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 
 const StoreContext = createContext();
 
@@ -27,6 +28,116 @@ export const StoreProvider = ({ children }) => {
     const [surveys, setSurveys] = useState([
         { id: 1, customerId: 1, rating: 5, comment: 'Excelente servicio', date: '2023-11-21' },
     ]);
+
+    // --- OFFLINE SUPPORT ---
+    const [isOnline, setIsOnline] = useState(navigator.onLine);
+    const [pendingSyncCount, setPendingSyncCount] = useState(0);
+
+    // Monitor Network Status with Heartbeat
+    useEffect(() => {
+        const checkConnection = async () => {
+            try {
+                // Ping the server to check real connectivity
+                // Use a timestamp to prevent caching
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 2000);
+
+                const res = await fetch(`http://localhost:3001/api/products?t=${Date.now()}`, {
+                    method: 'HEAD',
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+
+                if (res.ok) {
+                    setIsOnline(prev => {
+                        if (!prev) {
+                            console.log("Connection restored! Syncing...");
+                            syncPendingSales();
+                        }
+                        return true;
+                    });
+                } else {
+                    console.warn("Server responded with error, setting offline.");
+                    setIsOnline(false);
+                }
+            } catch (err) {
+                // console.warn("Heartbeat failed:", err); // Optional logging
+                setIsOnline(false);
+            }
+        };
+
+        // Initial check
+        checkConnection();
+
+        // Check every 2 seconds for faster feedback
+        const interval = setInterval(checkConnection, 2000);
+
+        const handleOnline = () => checkConnection();
+        const handleOffline = () => setIsOnline(false);
+
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+
+        // Check for pending sales on load
+        import('../services/offlineStorage').then(module => {
+            const OfflineStorage = module.default;
+            OfflineStorage.countPendingSales().then(count => setPendingSyncCount(count));
+        });
+
+        return () => {
+            clearInterval(interval);
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
+    }, []); // Empty dependency array to prevent interval reset
+
+    const syncPendingSales = async () => {
+        try {
+            const OfflineStorage = (await import('../services/offlineStorage')).default;
+            const pendingSales = await OfflineStorage.getPendingSales();
+
+            if (pendingSales.length === 0) {
+                setPendingSyncCount(0);
+                return;
+            }
+
+            console.log(`Syncing ${pendingSales.length} pending sales...`);
+            let syncedCount = 0;
+
+            for (const sale of pendingSales) {
+                try {
+                    // Remove internal ID before sending if needed, or backend ignores it
+                    const { id, offlineTimestamp, status, ...saleData } = sale;
+
+                    const res = await fetch('http://localhost:3001/api/sales', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(saleData)
+                    });
+
+                    if (res.ok) {
+                        await OfflineStorage.removePendingSale(id);
+                        syncedCount++;
+                    }
+                } catch (err) {
+                    console.error("Error syncing sale:", err);
+                    // Keep in DB to retry later
+                }
+            }
+
+            const remaining = await OfflineStorage.countPendingSales();
+            setPendingSyncCount(remaining);
+
+            if (syncedCount > 0) {
+                fetchProducts(); // Refresh stock after sync
+                fetchSales(); // Refresh sales list
+                alert(`Se han sincronizado ${syncedCount} ventas guardadas offline.`);
+            }
+
+        } catch (err) {
+            console.error("Error in sync process:", err);
+        }
+    };
 
     // Load Data from API
     useEffect(() => {
@@ -222,7 +333,7 @@ export const StoreProvider = ({ children }) => {
     const clearCart = () => setCart([]);
 
     // --- SALES ACTIONS ---
-    const addSale = (saleData) => {
+    const addSale = async (saleData) => {
         let prefix = 'T';
         let counterKey = 'ticket';
 
@@ -242,23 +353,52 @@ export const StoreProvider = ({ children }) => {
         const newSale = {
             ...saleData,
             receiptNumber,
-            cartItems: cart // Pass cart items to backend
+            cartItems: cart,
+            date: new Date().toISOString()
         };
 
-        // Optimistic Update
+        // Optimistic Update for Sales List
         setSales(prev => [newSale, ...prev]);
 
-        // Send to API
-        fetch('http://localhost:3001/api/sales', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newSale)
-        })
-            .then(res => res.json())
-            .then(() => {
-                fetchProducts(); // Refresh stock
-            })
-            .catch(err => console.error("Error saving sale:", err));
+        // Optimistic Update for Stock
+        setProducts(prevProducts => prevProducts.map(p => {
+            const itemInCart = cart.find(c => c.id === p.id);
+            if (itemInCart) {
+                toast.success(`Stock descontado: -${itemInCart.quantity} ${p.name}`, { icon: '📉' });
+                return { ...p, stock: p.stock - itemInCart.quantity };
+            }
+            return p;
+        }));
+
+        try {
+            const res = await fetch('http://localhost:3001/api/sales', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newSale)
+            });
+
+            if (!res.ok) {
+                const errorData = await res.json();
+                throw new Error(errorData.error || "Server error");
+            }
+
+            await res.json();
+            fetchProducts(); // Refresh stock from server to be sure
+
+        } catch (err) {
+            console.warn("Network error or server down, saving offline:", err);
+
+            // Save to IndexedDB
+            try {
+                const OfflineStorage = (await import('../services/offlineStorage')).default;
+                await OfflineStorage.savePendingSale(newSale);
+                const count = await OfflineStorage.countPendingSales();
+                setPendingSyncCount(count);
+            } catch (storageErr) {
+                console.error("Failed to save offline:", storageErr);
+                alert("Error crítico: No se pudo guardar la venta ni online ni offline.");
+            }
+        }
 
         return newSale;
     };
@@ -412,17 +552,24 @@ export const StoreProvider = ({ children }) => {
             setPurchases(prev => prev.map(p => {
                 if (p.id === purchaseId) {
                     if (newStatus === 'Confirmed' && p.status !== 'Confirmed') {
-                        // Increase Stock (Optimistic - ideally backend handles this transactionally)
-                        // For now we just update frontend state, assuming backend logic could be added later or separate stock adjustment
+                        // Increase Stock (Optimistic)
                         setProducts(currentProducts => currentProducts.map(prod => {
                             const item = p.items.find(i => i.productId === prod.id);
-                            return item ? { ...prod, stock: prod.stock + item.quantity, cost: item.cost || prod.cost } : prod;
+                            if (item) {
+                                toast.success(`Stock actualizado: +${item.quantity} ${prod.name}`, { icon: '📦' });
+                                return { ...prod, stock: prod.stock + item.quantity, cost: item.cost || prod.cost };
+                            }
+                            return prod;
                         }));
                     } else if (newStatus === 'Cancelled' && p.status === 'Confirmed') {
                         // Decrease Stock
                         setProducts(currentProducts => currentProducts.map(prod => {
                             const item = p.items.find(i => i.productId === prod.id);
-                            return item ? { ...prod, stock: prod.stock - item.quantity } : prod;
+                            if (item) {
+                                toast('Stock revertido: -' + item.quantity + ' ' + prod.name, { icon: '↩️' });
+                                return { ...prod, stock: prod.stock - item.quantity };
+                            }
+                            return prod;
                         }));
                     }
                     return { ...p, status: newStatus };
@@ -464,6 +611,17 @@ export const StoreProvider = ({ children }) => {
         setClaims(prev => prev.map(c => c.id === claimId ? { ...c, status, resolution } : c));
     };
 
+    const clearPendingSales = async () => {
+        try {
+            const OfflineStorage = (await import('../services/offlineStorage')).default;
+            await OfflineStorage.clearPendingSales();
+            setPendingSyncCount(0);
+            alert("Ventas pendientes eliminadas.");
+        } catch (err) {
+            console.error("Error clearing pending sales:", err);
+        }
+    };
+
     const value = {
         products, setProducts, addProduct, updateProduct, deleteProduct,
         cart, addToCart, removeFromCart, clearCart, updateQuantity,
@@ -474,7 +632,8 @@ export const StoreProvider = ({ children }) => {
         claims, addClaim, updateClaimStatus,
         surveys,
         sales, addSale,
-        loading
+        loading,
+        isOnline, pendingSyncCount, syncPendingSales, clearPendingSales
     };
 
     return (

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Search, Plus, Filter, Edit, Trash2, AlertTriangle, FileText, Bell } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useStore } from '../../context/StoreContext';
 import Input from '../../components/Input';
 import Button from '../../components/Button';
@@ -28,9 +29,15 @@ const Inventory = () => {
             if (res.ok) {
                 const data = await res.json();
                 setAlerts(data);
+                if (data.length > 0) {
+                    toast.error(`Se encontraron ${data.length} productos con stock crítico`, { icon: '⚠️' });
+                } else {
+                    toast.success("Inventario saludable: No hay alertas de stock", { icon: '✅' });
+                }
             }
         } catch (error) {
             console.error("Error fetching alerts:", error);
+            toast.error("Error al verificar alertas de stock");
         }
     };
 
@@ -132,12 +139,12 @@ const Inventory = () => {
                                 <td>{product.category}</td>
                                 <td>S/ {product.price.toFixed(2)}</td>
                                 <td>
-                                    <span className={`stock-badge ${product.stock < 10 ? 'low-stock' : 'in-stock'}`}>
+                                    <span className={`stock-badge ${product.stock <= (product.minStock || 10) ? 'low-stock' : 'in-stock'}`}>
                                         {product.stock} un.
                                     </span>
                                 </td>
                                 <td>
-                                    {product.stock < 10 ? (
+                                    {product.stock <= (product.minStock || 10) ? (
                                         <span className="status-text warning">
                                             <AlertTriangle size={14} /> Stock Bajo
                                         </span>

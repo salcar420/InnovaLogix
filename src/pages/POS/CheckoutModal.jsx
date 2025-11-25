@@ -8,7 +8,7 @@ import { generateReceiptPDF } from '../../services/receiptService';
 import './CheckoutModal.css';
 
 const CheckoutModal = ({ isOpen, onClose }) => {
-    const { cart, clearCart, addSale } = useStore();
+    const { cart, clearCart, addSale, isOnline } = useStore();
     const [step, setStep] = useState('payment'); // payment, qr, pos, success
     const [paymentMethod, setPaymentMethod] = useState('cash');
     const [receiptType, setReceiptType] = useState('ticket'); // ticket (simple), boleta, factura
@@ -78,20 +78,33 @@ const CheckoutModal = ({ isOpen, onClose }) => {
         }
     };
 
-    const processSale = () => {
-        const saleData = addSale({
-            total,
-            items: cart.reduce((sum, item) => sum + item.quantity, 0),
-            paymentMethod,
-            receiptType,
-            clientData: receiptType === 'ticket' ? null : clientData
-        });
+    const processSale = async () => {
+        try {
+            const saleData = await addSale({
+                total,
+                items: cart.reduce((sum, item) => sum + item.quantity, 0),
+                paymentMethod,
+                receiptType,
+                clientData: receiptType === 'ticket' ? null : clientData
+            });
 
-        setLastSale(saleData);
-        generateReceiptPDF(saleData, cart); // Auto-download PDF
+            setLastSale(saleData);
 
-        setStep('success');
-        clearCart();
+            // Generate PDF only if we have valid sale data
+            if (saleData) {
+                try {
+                    generateReceiptPDF(saleData, cart); // Auto-download PDF
+                } catch (pdfError) {
+                    console.error("Error generating receipt:", pdfError);
+                }
+            }
+
+            setStep('success');
+            clearCart();
+        } catch (error) {
+            console.error("Error processing sale:", error);
+            setStatusMessage("Error al procesar la venta. Intente nuevamente.");
+        }
     };
 
     const handleClose = () => {
@@ -184,6 +197,11 @@ const CheckoutModal = ({ isOpen, onClose }) => {
 
                         <div className="form-group">
                             <label className="form-label">Método de Pago</label>
+                            {!isOnline && (
+                                <div className="offline-warning" style={{ color: '#b91c1c', fontSize: '0.85rem', marginBottom: '8px', padding: '8px', backgroundColor: '#fef2f2', borderRadius: '4px' }}>
+                                    ⚠️ Modo Offline: Solo se permite pago en efectivo.
+                                </div>
+                            )}
                             <div className="option-grid">
                                 <button
                                     className={`option-btn ${paymentMethod === 'cash' ? 'active' : ''}`}
@@ -193,13 +211,17 @@ const CheckoutModal = ({ isOpen, onClose }) => {
                                 </button>
                                 <button
                                     className={`option-btn ${paymentMethod === 'tarjeta' ? 'active' : ''}`}
-                                    onClick={() => setPaymentMethod('tarjeta')}
+                                    onClick={() => isOnline && setPaymentMethod('tarjeta')}
+                                    disabled={!isOnline}
+                                    style={{ opacity: !isOnline ? 0.5 : 1, cursor: !isOnline ? 'not-allowed' : 'pointer' }}
                                 >
                                     <CreditCard size={18} /> Tarjeta
                                 </button>
                                 <button
                                     className={`option-btn ${paymentMethod === 'yape' ? 'active' : ''}`}
-                                    onClick={() => setPaymentMethod('yape')}
+                                    onClick={() => isOnline && setPaymentMethod('yape')}
+                                    disabled={!isOnline}
+                                    style={{ opacity: !isOnline ? 0.5 : 1, cursor: !isOnline ? 'not-allowed' : 'pointer' }}
                                 >
                                     <Smartphone size={18} /> Yape/Plin
                                 </button>

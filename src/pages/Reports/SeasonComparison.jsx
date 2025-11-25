@@ -1,39 +1,72 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
+import { useStore } from '../../context/StoreContext';
 import { ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import './SeasonComparison.css';
 
 const SeasonComparison = () => {
-    const [season1, setSeason1] = useState('Verano 2023');
-    const [season2, setSeason2] = useState('Verano 2024');
+    const { sales } = useStore();
+    const [period, setPeriod] = useState('15d'); // 15d, 30d
 
-    // Mock data for comparison
-    const data = {
-        'Verano 2023': { sales: 12500, orders: 150, topProduct: 'Carpa 4 Personas' },
-        'Invierno 2023': { sales: 18000, orders: 210, topProduct: 'Casaca Térmica' },
-        'Verano 2024': { sales: 15000, orders: 180, topProduct: 'Carpa 4 Personas' },
-        'Invierno 2024': { sales: 22000, orders: 250, topProduct: 'Botas Trekking' },
-    };
+    const comparisonData = useMemo(() => {
+        const today = new Date();
+        const currentPeriodStart = new Date(today);
+        const prevPeriodStart = new Date(today);
+        const prevPeriodEnd = new Date(today);
 
-    const s1Data = data[season1] || { sales: 0, orders: 0, topProduct: '-' };
-    const s2Data = data[season2] || { sales: 0, orders: 0, topProduct: '-' };
+        const days = period === '15d' ? 15 : 30;
 
-    const salesDiff = s2Data.sales - s1Data.sales;
-    const salesGrowth = s1Data.sales > 0 ? (salesDiff / s1Data.sales) * 100 : 0;
+        currentPeriodStart.setDate(today.getDate() - days);
+        prevPeriodEnd.setDate(currentPeriodStart.getDate() - 1);
+        prevPeriodStart.setDate(prevPeriodEnd.getDate() - days);
+
+        const currentSales = sales.filter(s => {
+            const d = new Date(s.date);
+            return d >= currentPeriodStart && d <= today;
+        });
+
+        const prevSales = sales.filter(s => {
+            const d = new Date(s.date);
+            return d >= prevPeriodStart && d <= prevPeriodEnd;
+        });
+
+        const calcStats = (salesList) => {
+            const totalSales = salesList.reduce((sum, s) => sum + s.total, 0);
+            const totalOrders = salesList.length;
+
+            // Find top product
+            const productCounts = {};
+            salesList.forEach(s => {
+                // Assuming s.items is a count, we can't get product name from sale summary easily
+                // But if we had sale items details we could. 
+                // For now, we'll use a placeholder or try to fetch if available.
+                // In StoreContext, sales are just the sales table. 
+                // We don't have items details here without fetching sale_items.
+                // So we will skip top product for now or show "N/A"
+            });
+
+            return { sales: totalSales, orders: totalOrders, topProduct: 'N/A' };
+        };
+
+        return {
+            current: calcStats(currentSales),
+            previous: calcStats(prevSales),
+            days
+        };
+    }, [sales, period]);
+
+    const { current, previous } = comparisonData;
+
+    const salesDiff = current.sales - previous.sales;
+    const salesGrowth = previous.sales > 0 ? (salesDiff / previous.sales) * 100 : (current.sales > 0 ? 100 : 0);
 
     return (
         <div className="season-comparison">
             <div className="comparison-controls">
                 <div className="control-group">
-                    <label>Temporada Base</label>
-                    <select value={season1} onChange={e => setSeason1(e.target.value)}>
-                        {Object.keys(data).map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                </div>
-                <div className="vs-badge">VS</div>
-                <div className="control-group">
-                    <label>Temporada Comparar</label>
-                    <select value={season2} onChange={e => setSeason2(e.target.value)}>
-                        {Object.keys(data).map(s => <option key={s} value={s}>{s}</option>)}
+                    <label>Periodo de Análisis</label>
+                    <select value={period} onChange={e => setPeriod(e.target.value)}>
+                        <option value="15d">Últimos 15 días</option>
+                        <option value="30d">Últimos 30 días</option>
                     </select>
                 </div>
             </div>
@@ -43,12 +76,12 @@ const SeasonComparison = () => {
                     <h4>Ventas Totales</h4>
                     <div className="comp-values">
                         <div className="val-col">
-                            <span>{season1}</span>
-                            <strong>S/ {s1Data.sales.toLocaleString()}</strong>
+                            <span>Periodo Anterior</span>
+                            <strong>S/ {previous.sales.toLocaleString()}</strong>
                         </div>
                         <div className="val-col">
-                            <span>{season2}</span>
-                            <strong>S/ {s2Data.sales.toLocaleString()}</strong>
+                            <span>Periodo Actual</span>
+                            <strong>S/ {current.sales.toLocaleString()}</strong>
                         </div>
                     </div>
                     <div className={`growth-badge ${salesGrowth >= 0 ? 'positive' : 'negative'}`}>
@@ -61,12 +94,12 @@ const SeasonComparison = () => {
                     <h4>Pedidos Totales</h4>
                     <div className="comp-values">
                         <div className="val-col">
-                            <span>{season1}</span>
-                            <strong>{s1Data.orders}</strong>
+                            <span>Periodo Anterior</span>
+                            <strong>{previous.orders}</strong>
                         </div>
                         <div className="val-col">
-                            <span>{season2}</span>
-                            <strong>{s2Data.orders}</strong>
+                            <span>Periodo Actual</span>
+                            <strong>{current.orders}</strong>
                         </div>
                     </div>
                 </div>
@@ -75,14 +108,15 @@ const SeasonComparison = () => {
                     <h4>Producto Top</h4>
                     <div className="comp-values">
                         <div className="val-col">
-                            <span>{season1}</span>
-                            <strong>{s1Data.topProduct}</strong>
+                            <span>Periodo Anterior</span>
+                            <strong>{previous.topProduct}</strong>
                         </div>
                         <div className="val-col">
-                            <span>{season2}</span>
-                            <strong>{s2Data.topProduct}</strong>
+                            <span>Periodo Actual</span>
+                            <strong>{current.topProduct}</strong>
                         </div>
                     </div>
+                    <small style={{ display: 'block', marginTop: '5px', color: '#888' }}>* Detalle no disponible en resumen</small>
                 </div>
             </div>
         </div>
