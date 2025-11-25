@@ -153,6 +153,65 @@ app.delete('/api/products/:id', async (req, res) => {
     }
 });
 
+// --- INVENTORY KARDEX & ALERTS ---
+app.get('/api/inventory/kardex/:productId', async (req, res) => {
+    try {
+        const result = await pool.query(
+            "SELECT * FROM inventory_movements WHERE productId = $1 ORDER BY id DESC",
+            [req.params.productId]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/inventory/alerts', async (req, res) => {
+    try {
+        // INV-01: Dynamic Threshold Calculation
+        // 1. Calculate Avg Daily Sales (last 30 days)
+        // 2. Default Lead Time = 7 days (could be per supplier/product in future)
+
+        const salesData = await pool.query(`
+            SELECT si.productName, SUM(si.quantity) as totalSold
+            FROM sale_items si
+            JOIN sales s ON si.saleId = s.id
+            WHERE s.date >= NOW() - INTERVAL '30 days'
+            GROUP BY si.productName
+        `);
+
+        const products = await pool.query("SELECT * FROM products");
+
+        const alerts = products.rows.map(p => {
+            const saleStat = salesData.rows.find(s => s.productname === p.name);
+            const totalSold30Days = saleStat ? parseInt(saleStat.totalsold) : 0;
+            const avgDailySales = totalSold30Days / 30;
+            const leadTimeDays = 7; // Configurable in future
+
+            // Dynamic Minimum Stock
+            const dynamicMinStock = Math.ceil(avgDailySales * leadTimeDays);
+
+            // Use the higher of dynamic or static minStock to be safe, or just dynamic
+            const effectiveMinStock = Math.max(dynamicMinStock, p.minstock || 0);
+
+            if (p.stock <= effectiveMinStock) {
+                return {
+                    ...p,
+                    avgDailySales: avgDailySales.toFixed(2),
+                    dynamicMinStock,
+                    effectiveMinStock,
+                    suggestedReorder: Math.max(effectiveMinStock * 2 - p.stock, 10) // Simple reorder logic
+                };
+            }
+            return null;
+        }).filter(Boolean);
+
+        res.json(alerts);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // --- SALES ---
 app.get('/api/sales', async (req, res) => {
     try {
@@ -218,6 +277,16 @@ app.post('/api/sales', async (req, res) => {
                 stock: newStock,
                 quantitySold: item.quantity
             });
+
+            // INV-02: Record Movement (Kardex)
+            const prodIdRes = await client.query("SELECT id FROM products WHERE name = $1", [item.name]);
+            const prodId = prodIdRes.rows[0].id;
+
+            await client.query(
+                `INSERT INTO inventory_movements (productId, type, quantity, previousStock, newStock, reference, timestamp)
+                 VALUES ($1, 'SALE', $2, $3, $4, $5, $6)`,
+                [prodId, -item.quantity, currentStock, currentStock - item.quantity, `Sale #${saleId}`, date]
+            );
         }
 
         await client.query('COMMIT');
@@ -344,9 +413,20 @@ app.put('/api/purchases/:id/status', async (req, res) => {
         if (status === 'Confirmed' && currentStatus !== 'Confirmed') {
             const itemsRes = await client.query("SELECT * FROM purchase_items WHERE purchaseId = $1", [purchaseId]);
             for (const item of itemsRes.rows) {
+                // Get current stock before update
+                const pRes = await client.query("SELECT stock FROM products WHERE id = $1", [item.productid]);
+                const currentStock = pRes.rows[0].stock;
+
                 await client.query(
                     "UPDATE products SET stock = stock + $1 WHERE id = $2",
                     [item.quantity, item.productid]
+                );
+
+                // INV-02: Record Movement (Kardex)
+                await client.query(
+                    `INSERT INTO inventory_movements (productId, type, quantity, previousStock, newStock, reference, timestamp)
+                     VALUES ($1, 'PURCHASE_CONFIRM', $2, $3, $4, $5, NOW())`,
+                    [item.productid, item.quantity, currentStock, currentStock + item.quantity, `Purchase #${purchaseId}`]
                 );
                 
                 // Get updated stock
@@ -365,6 +445,10 @@ app.put('/api/purchases/:id/status', async (req, res) => {
         } else if (status === 'Cancelled' && currentStatus === 'Confirmed') {
             const itemsRes = await client.query("SELECT * FROM purchase_items WHERE purchaseId = $1", [purchaseId]);
             for (const item of itemsRes.rows) {
+                // Get current stock before update
+                const pRes = await client.query("SELECT stock FROM products WHERE id = $1", [item.productid]);
+                const currentStock = pRes.rows[0].stock;
+
                 await client.query(
                     "UPDATE products SET stock = stock - $1 WHERE id = $2",
                     [item.quantity, item.productid]
@@ -382,6 +466,13 @@ app.put('/api/purchases/:id/status', async (req, res) => {
                         quantityRemoved: item.quantity
                     });
                 }
+
+                // INV-02: Record Movement (Kardex)
+                await client.query(
+                    `INSERT INTO inventory_movements (productId, type, quantity, previousStock, newStock, reference, timestamp)
+                     VALUES ($1, 'PURCHASE_CANCEL', $2, $3, $4, $5, NOW())`,
+                    [item.productid, -item.quantity, currentStock, currentStock - item.quantity, `Purchase #${purchaseId}`]
+                );
             }
         }
 
